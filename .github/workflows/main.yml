@@ -1,0 +1,42 @@
+name: Trigger AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  trigger-flowstudio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire FlowStudio webhook
+        env:
+          FLOWSTUDIO_WEBHOOK_SECRET: ${{ secrets.FLOWSTUDIO_WEBHOOK_SECRET }}
+          PR_OWNER: ${{ github.repository_owner }}
+          PR_REPO: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          # Build the JSON payload the fetcher agent expects, then wrap
+          # it as initial_input per FlowStudio's trigger contract.
+          PAYLOAD=$(jq -n \
+            --arg owner "$PR_OWNER" \
+            --arg repo "$PR_REPO" \
+            --argjson number "$PR_NUMBER" \
+            --arg pr_title "$PR_TITLE" \
+            --arg pr_author "$PR_AUTHOR" \
+            '{
+              initial_input: {
+                owner: $owner,
+                repo: $repo,
+                number: $number,
+                pr_title: $pr_title,
+                pr_description: "",
+                pr_author: $pr_author
+              }
+            }')
+
+          curl -X POST "https://api.flowstudio-ai.com/triggers/webhooks/746bbe3f-c901-4751-afd5-089213d1b2c3/trigger" \
+            -H "X-Webhook-Secret: $FLOWSTUDIO_WEBHOOK_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
