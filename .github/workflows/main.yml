@@ -17,24 +17,27 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
-          # Build the JSON payload the fetcher agent expects, then wrap
-          # it as initial_input per FlowStudio's trigger contract.
-          PAYLOAD=$(jq -n \
+          # Build the inner payload the fetcher agent expects...
+          INNER=$(jq -n \
             --arg owner "$PR_OWNER" \
             --arg repo "$PR_REPO" \
             --argjson number "$PR_NUMBER" \
             --arg pr_title "$PR_TITLE" \
             --arg pr_author "$PR_AUTHOR" \
             '{
-              initial_input: {
-                owner: $owner,
-                repo: $repo,
-                number: $number,
-                pr_title: $pr_title,
-                pr_description: "",
-                pr_author: $pr_author
-              }
+              owner: $owner,
+              repo: $repo,
+              number: $number,
+              pr_title: $pr_title,
+              pr_description: "",
+              pr_author: $pr_author
             }')
+
+          # ...then stringify it and wrap it as initial_input, since
+          # FlowStudio's trigger requires initial_input to be a STRING,
+          # not a nested JSON object — confirmed by the 422 error:
+          # "initial_input: Input should be a valid string".
+          PAYLOAD=$(jq -n --arg input "$INNER" '{initial_input: $input}')
 
           curl -X POST "https://api.flowstudio-ai.com/triggers/webhooks/746bbe3f-c901-4751-afd5-089213d1b2c3/trigger" \
             -H "X-Webhook-Secret: $FLOWSTUDIO_WEBHOOK_SECRET" \
